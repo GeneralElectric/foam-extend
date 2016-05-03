@@ -1,0 +1,269 @@
+diff --git a/Allwmake.mingw b/Allwmake.mingw
+index 767b400..c90274c 100644
+--- a/Allwmake.mingw
++++ b/Allwmake.mingw
+@@ -69,6 +69,7 @@ echo "Build foam-extend ... (see `pwd`/Allwmake.log)"
+ ./Allwmake > Allwmake.log 2>&1
+ echo "Copying MinGW dependencies to $FOAM_APPBIN ..."
+ cp -p $MINGW_HOME/bin/libgcc_s_seh-1.dll $FOAM_APPBIN
++cp -p $MINGW_HOME/bin/libgomp-1.dll $FOAM_APPBIN
+ cp -p $MINGW_HOME/bin/libstdc++-6.dll $FOAM_APPBIN
+ cp -p $MINGW_HOME/bin/libwinpthread-1.dll $FOAM_APPBIN
+ echo "Creating release package ... (see `pwd`/createWindowsBinaryPackage.log)"
+diff --git a/ListOfContributors b/ListOfContributors
+index 67af907..4db79dc 100644
+--- a/ListOfContributors
++++ b/ListOfContributors
+@@ -85,3 +85,4 @@ Contents:
+     Alexander Vakhrushev
+     Inno Gatin
+     Alexey Matveichev
++    Cesare Guardino
+diff --git a/ThirdParty/mingwBuild/build.sh b/ThirdParty/mingwBuild/build.sh
+index a10de7b..f4002e8 100644
+--- a/ThirdParty/mingwBuild/build.sh
++++ b/ThirdParty/mingwBuild/build.sh
+@@ -221,9 +221,9 @@ build_library() {
+             export EXTRA_SYSTEM_HOME=
+             ;;
+ 
+-        scotch_6.0.4)
++        scotch_6.0.0)
+             export PTHREADS_HOME=$BUILD_DIR/pthreads-w32-2-9-1-release
+-            download $PACKAGE.tar.gz https://gforge.inria.fr/frs/download.php/34618 > $LOG_FILE 2>&1
++            download $PACKAGE.tar.gz https://gforge.inria.fr/frs/download.php/31831 > $LOG_FILE 2>&1
+             extract "$PACKAGE.tar.gz" gzip >> $LOG_FILE 2>&1
+             patch $PACKAGE
+             cd $PACKAGE/src
+@@ -263,7 +263,7 @@ build_libraries() {
+     build_library metis-5.1.0
+     build_library parmetis-4.0.3
+     build_library ParMGridGen-1.0
+-    build_library scotch_6.0.4
++    build_library scotch_6.0.0
+     build_library mesquite-2.1.2
+ }
+ 
+diff --git a/bin/createWindowsBinaryPackage b/bin/createWindowsBinaryPackage
+index 43cb0b9..ef0dac4 100755
+--- a/bin/createWindowsBinaryPackage
++++ b/bin/createWindowsBinaryPackage
+@@ -74,7 +74,7 @@ if [ ! -d $RELEASE_DIR ] ; then
+     mkdir $RELEASE_DIR
+ fi
+ 
+-PACKAGE_DIR=$RELEASE_DIR/$WM_PROJECT-$WM_FORK-$WM_PROJECT_VERSION-win-x64
++PACKAGE_DIR=$RELEASE_DIR/$WM_PROJECT-$WM_FORK-GE-OSS-$WM_PROJECT_VERSION-win-x64
+ if [ -d $PACKAGE_DIR ] ; then
+     echo "Removing previous $PACKAGE_DIR ..."
+     rm -rf $PACKAGE_DIR
+@@ -93,18 +93,28 @@ echo "Copying extra files from bin directory ..."
+ cp -p $WM_PROJECT_DIR/bin/setWindowsEnvironment.bat $PACKAGE_DIR/
+ cp -p $WM_PROJECT_DIR/bin/foamWindowsShell.bat $PACKAGE_DIR/
+ cp -p $WM_PROJECT_DIR/bin/paraFoam.bat $PACKAGE_DIR/bin
++unix2dos $PACKAGE_DIR/setWindowsEnvironment.bat
++unix2dos $PACKAGE_DIR/foamWindowsShell.bat
++unix2dos $PACKAGE_DIR/bin/paraFoam.bat
+ 
+ echo "Copying extra files from etc directory ..."
+ mkdir $PACKAGE_DIR/etc
+ cp -p $WM_PROJECT_DIR/etc/cellModels $PACKAGE_DIR/etc
+ cp -rp $WM_PROJECT_DIR/etc/thermoData $PACKAGE_DIR/etc
++cp -p $WM_PROJECT_DIR/foam-extend-GE-OSS-3.2-win-x64.patch $PACKAGE_DIR/etc
+ 
+ echo "Copying doc and license files ..."
+ cp -p $WM_PROJECT_DIR/doc/buildInstructions/Windows/READMEBinaryPackage.txt $PACKAGE_DIR/
+ cp -p $WM_PROJECT_DIR/COPYING $PACKAGE_DIR/LICENSE.txt
++cp -p $WM_PROJECT_DIR/OSS_NOTICE.pdf $PACKAGE_DIR/OSS_NOTICE.pdf
+ unix2dos $PACKAGE_DIR/LICENSE.txt
++unix2dos $PACKAGE_DIR/READMEBinaryPackage.txt
+ 
++echo "Creating archives ..."
+ create_package $PACKAGE_DIR zip
+ create_package $PACKAGE_DIR 7z
+ 
++echo "Removing package directory ..."
+ rm -rf $PACKAGE_DIR
++
++echo "All done!"
+diff --git a/bin/foamWindowsShell.bat b/bin/foamWindowsShell.bat
+index 212063e..e3750a3 100644
+--- a/bin/foamWindowsShell.bat
++++ b/bin/foamWindowsShell.bat
+@@ -6,7 +6,7 @@ call %FOAM_HOME%\setWindowsEnvironment.bat
+ mode 160,40
+ color 81
+ echo ---------------------------------
+-echo Command shell for foam-extend-3.1
++echo Command shell for foam-extend-3.2
+ echo ---------------------------------
+ echo/
+ cmd.exe
+diff --git a/bin/setWindowsEnvironment.bat b/bin/setWindowsEnvironment.bat
+index abf3250..039dc68 100644
+--- a/bin/setWindowsEnvironment.bat
++++ b/bin/setWindowsEnvironment.bat
+@@ -13,4 +13,4 @@ set MPI_BUFFER_SIZE=20000000
+ 
+ if defined PARAVIEW_HOME set PATH=%PARAVIEW_HOME%\bin;%PATH%
+ if defined MPI_ROOTDIR set PATH=%MPI_ROOTDIR%\bin;%PATH%
+-set PATH=%FOAM_HOME%\lib;%FOAM_HOME%\lib\openmpi-1.6.1;%FOAM_HOME%\bin;%PATH%
++set PATH=%FOAM_HOME%\lib;%FOAM_HOME%\bin;%PATH%
+diff --git a/doc/buildInstructions/Windows/README.txt b/doc/buildInstructions/Windows/README.txt
+index a620d5a..96a2c00 100644
+--- a/doc/buildInstructions/Windows/README.txt
++++ b/doc/buildInstructions/Windows/README.txt
+@@ -52,24 +52,15 @@ already have the correct tools installed on your system.
+    (such as Strawberry Perl), although you need to be careful of the
+     version numbers.
+ 
+-3) Download and install MSYS (see reference list below).  If this is your first
+-   use of MSYS, create a file fstab in c/MinGW/msys/1.0/etc with single-line
+-   contents:
++3) Download and install MSYS (see reference list below). If this is your first
++   use of MSYS, create a file fstab in c/MinGW/msys/1.0/etc with single-line contents:
++       c:/mingw /mingw
++   This mounts your home directory (this assumes you have installed MSYS to the default
++   c:/MinGW directory). From Windows, you will find your home directory under
++       c:/MinGW/msys/1.0/home/<user name>
+ 
+-   c:/mingw /mingw
+-
+-   to mount your home directory (this assumes you have installed MSYS to the default
+-   c:/MinGW directory).
+-   From Windows, you will find your home directory under
+-   c:/MinGW/msys/1.0/home/<user name>
+-
+-4) Download the foam-extend source code from
+-
+-   http://sourceforge.net/projects/openfoam-extend/
+-
+-   using the command:
+-
+-   git clone --branch nextRelease git://git.code.sf.net/p/openfoam-extend/foam-extend-3.1 foam-extend-3.2
++4) Download the foam-extend 3.2 source code using Git:
++       git clone --branch v3.2 http://git.code.sf.net/p/openfoam-extend/foam-extend-3.1 foam-extend-3.2
+ 
+ 5) Open a new MSYS shell and chdir to your foam-extend-3.2 source directory.
+ 
+@@ -162,10 +153,10 @@ Version: 0.44 (or above)
+ URL    : http://sourceforge.net/projects/mingw/files/MinGW/Extension/pexports/pexports-0.46/pexports-0.46-mingw32-bin.tar.xz/download
+ For    : Extracting symbols from OpenMPI DLLs to pass to dlltool.exe (supplied in MinGW-w64 package). Move directory "bin" to "pexports-0.46" after unpacking.
+ 
+-Name   : Pyhton
++Name   : Python
+ Version: 2.7
+ URL    : https://www.python.org/download/releases/2.7/
+-For    : Not essential
++For    : Running Python scripts. Not essential
+ 
+ Name   : Strawberry Perl
+ Version: 5.20.2.1 (or above)
+@@ -175,15 +166,13 @@ For    : Running Perl scripts, "pexports.exe" and "gmake.exe" utilities
+ Name   : Subversion
+ Version: 1.8.13
+ URL    : http://sourceforge.net/projects/win32svn/files/1.8.13/
+-For    : ??????????
++For    : Version control system. Not essential.
+ 
+ Name   : wget
+ Version: 1.11.4-1 (or above)
+ URL    : http://downloads.sourceforge.net/gnuwin32/wget-1.11.4-1-bin.zip, http://downloads.sourceforge.net/gnuwin32/wget-1.11.4-1-dep.zip, http://downloads.sourceforge.net/gnuwin32/wget-1.11.4-1-doc.zip
+ For    : Automatically downloading files from internet (eg. for use in automated build scripts)
+ 
+-git clone --branch nextRelease git://git.code.sf.net/p/openfoam-extend/foam-extend-3.1
+-
+ 
+ 4. EXAMPLE OUTPUT FROM SOURCING etc/bashrc.mingw
+ ================================================
+diff --git a/doc/buildInstructions/Windows/READMEBinaryPackage.txt b/doc/buildInstructions/Windows/READMEBinaryPackage.txt
+index ecf9af4..69836a5 100644
+--- a/doc/buildInstructions/Windows/READMEBinaryPackage.txt
++++ b/doc/buildInstructions/Windows/READMEBinaryPackage.txt
+@@ -87,3 +87,13 @@ NOTES
+ 1) This version does not fully support runtime selection of extended features. If necessary, you can
+    explicitly load the required DLL using the "libs" function in system/controlDict, for example:
+        libs ("liblduSolvers.dll");
++
++2) Due to licensing restrictions, the following features have been removed from this release:
++       - ParMETIS           (bin\dbnsFoam.exe, bin\dbnsTurbFoam.exe, lib\libdbns.dll, lib\libMGridGenGAMGAgglomeration.dll)
++       - ParMGridGen        (lib\libparMetisDecomp.dll)
++       - Tecplot TecIO
++       - Viewpoint Datalabs (bin\surfaceCoarsen.exe)
++
++3) The original foam-extend 3.2 source code is available from Git:
++       git clone --branch v3.2 http://git.code.sf.net/p/openfoam-extend/foam-extend-3.1 foam-extend-3.2
++   The source code patch used to build this version is stored in etc/foam-extend-GE-OSS-3.2-win-x64.patch
+diff --git a/etc/bashrc.mingw b/etc/bashrc.mingw
+index d4928d9..e9f8ad5 100755
+--- a/etc/bashrc.mingw
++++ b/etc/bashrc.mingw
+@@ -42,14 +42,15 @@ export PROGRAMS_HOME=/c/Programs
+ set_system_paths() {
+     echo "Setting environment variables for user-defined installed system tools and utilities ..."
+     export CMAKE_HOME=$PROGRAMS_HOME/cmake-3.2.3-win32-x86
+-    export GIT_HOME=$PROGRAMS_HOME/Git
+-    export MINGW_HOME=$PROGRAMS_HOME/mingw64
++    #export GIT_HOME=$PROGRAMS_HOME/Git
++    #export JAVA_HOME="/c/Program Files/Java/jre1.8.0_45"
++    export MINGW_HOME=$PROGRAMS_HOME/x86_64-4.8.2-release-win32-seh-rt_v3-rev3/mingw64
+     export MPI_ROOTDIR=$PROGRAMS_HOME/OpenMPI_v1.6.1-x64
+     export PARAVIEW_HOME=$PROGRAMS_HOME/ParaView-4.3.1
+-    #export PERL_HOME=$PROGRAMS_HOME/strawberry-perl-5.20.2.1-64bit/perl
+-    export PEXPORTS_HOME=$PROGRAMS_HOME/pexports-0.46
+-    export PYTHON_HOME=$PROGRAMS_HOME/Python27
+-    export SUBVERSION_HOME=$PROGRAMS_HOME/svn-win32-1.8.13
++    export PERL_HOME=$PROGRAMS_HOME/strawberry-perl-5.20.2.1-64bit/perl
++    #export PEXPORTS_HOME=$PROGRAMS_HOME/pexports-0.46-mingw32
++    #export PYTHON_HOME=$PROGRAMS_HOME/Python27
++    #export SUBVERSION_HOME=$PROGRAMS_HOME/svn-win32-1.8.13
+     export WGET_HOME=$PROGRAMS_HOME/wget-1.11.4-1
+     export ZIP_HOME="/c/Program Files/7-Zip"
+ }
+@@ -59,16 +60,16 @@ add_to_path() {
+     echo "Adding user-defined installed system tools to PATH ..."
+     export PATH=$ZIP_HOME:$PATH
+     export PATH=$WGET_HOME/bin:$PATH
+-    export PATH=$PYTHON_HOME:$PATH
+-    export PATH=$SUBVERSION_HOME/bin:$PATH
+-    export PATH=$GIT_HOME/cmd:$PATH
+-    #export PATH=$PERL_HOME/bin:$PATH
++    #export PATH=$JAVA_HOME/bin:$PATH
++    #export PATH=$PYTHON_HOME:$PATH
++    #export PATH=$SUBVERSION_HOME/bin:$PATH
++    #export PATH=$GIT_HOME/cmd:$PATH
+     export PATH=$PARAVIEW_HOME/bin:$PATH
++    export PATH=$PERL_HOME/bin:$PATH
+     export PATH=$CMAKE_HOME/bin:$PATH
+-    export PATH=$PEXPORTS_HOME/bin:$PATH
+-    export PATH=$MINGW_HOME/bin:$PATH
+-#   MPI comes last to enforce the path
+     export PATH=$MPI_ROOTDIR/bin:$PATH
++    #export PATH=$PEXPORTS_HOME/bin:$PATH
++    export PATH=$MINGW_HOME/bin:$PATH
+ }
+ # }}}
+ 
+diff --git a/etc/dosrc.mingw.bat b/etc/dosrc.mingw.bat
+new file mode 100644
+index 0000000..ff33a44
+--- /dev/null
++++ b/etc/dosrc.mingw.bat
+@@ -0,0 +1,17 @@
++@echo off
++
++rem =========== USER EDITABLE SETTINGS ===========
++set MPI_ROOTDIR=C:\Programs\OpenMPI_v1.6.1-x64
++set PARAVIEW_HOME=C:\Programs\ParaView-4.3.1
++rem ==============================================
++
++set FOAM_HOME=%~dp0..
++set WM_PROJECT_DIR=%FOAM_HOME%
++
++set MPI_BUFFER_SIZE=20000000
++
++if defined PARAVIEW_HOME set PATH=%PARAVIEW_HOME%\bin;%PATH%
++if defined MPI_ROOTDIR set PATH=%MPI_ROOTDIR%\bin;%PATH%
++set PATH=%FOAM_HOME%\lib\mingwGccDPOpt;%FOAM_HOME%\applications\bin\mingwGccDPOpt;%FOAM_HOME%\bin;%PATH%
++
++set PATH=%FOAM_HOME%\..\site\3.2\lib\mingwGccDPOpt;%FOAM_HOME%\..\site\3.2\bin\mingwGccDPOpt;%PATH%
